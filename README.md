@@ -39,11 +39,22 @@ Lifecycle entry:
   :lifecycle/calls :onyx.plugin.http/lifecycle-calls}]
 ```
 
+Segments coming in to your http task are expected in a form such as:
+```clojure
+{:url "http://localhost:41300/" :args {:body "a=1" :as :json}
+```
+
 #### Attributes
 
 |key                           | type      | description
 |------------------------------|-----------|------------
 |`:http-output/success-fn`     | `keyword` | Accepts response as argument, should return boolean to indicate if the response was successful. Request will be retried in case it wasn't a success.
+
+
+#### Acknowledgements
+
+Many thanks to [Vsevolod Solovyov](Vsevolod Solovyo://github.com/vsolovyov) for contributing this plugin to Onyx Platform.
+
 
 #### Contributing
 
