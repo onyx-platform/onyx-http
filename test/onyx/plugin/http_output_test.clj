@@ -30,7 +30,7 @@
   {:zookeeper/address zk-addr
    :zookeeper/server? true
    :zookeeper.server/port 2188
-   :onyx/id id})
+   :onyx/tenancy-id id})
 
 (def peer-config
   {:zookeeper/address zk-addr
@@ -38,7 +38,7 @@
    :onyx.messaging/impl :aeron
    :onyx.messaging/peer-port 40200
    :onyx.messaging/bind-addr "localhost"
-   :onyx/id id})
+   :onyx/tenancy-id id})
 
 (defn success? [{:keys [status body] :as response}]
   (and
