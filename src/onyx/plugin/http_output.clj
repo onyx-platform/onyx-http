@@ -42,7 +42,7 @@
              (let [ack-fn (fn []
                             (when (dec-count! ack)
                               (when-let [site (peer-site peer-replica-view (:completion-id ack))]
-                                (extensions/internal-ack-segment messenger event site ack))))
+                                (extensions/internal-ack-segment messenger site ack))))
                    async-exception-fn (fn [data] (reset! async-exception-info data))]
                (run! (fn [leaf]
                        (process-message client success? (:message leaf)
