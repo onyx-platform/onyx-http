@@ -49,7 +49,7 @@
                          ack-fn async-exception-fn))
                  (:leaves result))))
         (map list (:tree results) (:acks results))))
-    {:onyx.core/written? true})
+    {:http/written? true})
 
   (seal-resource [_ _]
     (.destroy client)
