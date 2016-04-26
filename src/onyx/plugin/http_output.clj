@@ -65,6 +65,10 @@
         async-exception-info (atom {})]
    (->JetWriter client success? async-exception-info)))
 
+(defn basic-auth-header [user password]
+  (str "Basic " (.encodeToString (java.util.Base64/getEncoder)
+                                 (.getBytes (str user ":" password) "UTF-8"))))
+
 (defrecord JetWriterBatch [client success? serializer-fn url args async-exception-info]
   p-ext/Pipeline
   (read-batch [_ event]
@@ -93,11 +97,24 @@
     (.destroy client)
     {}))
 
+(defn add-authorization [args auth-user-env auth-password-env]
+  (let [auth-user (System/getenv auth-user-env)
+        auth-password (System/getenv auth-password-env)]
+    (assoc-in args [:headers "Authorization"] (basic-auth-header auth-user auth-password))))
+
 (defn batch-output [{:keys [onyx.core/task-map] :as pipeline-data}]
   (let [client (http/client)
-        url (:http-output/url task-map)
-        args (:http-output/args task-map)
+        {:keys [http-output/url http-output/args http-output/auth-user-env http-output/auth-password-env]} task-map
+        args (cond (and auth-user-env auth-password-env)
+                   (add-authorization args auth-user-env auth-password-env)
+                   (or (and auth-user-env (not auth-password-env)) 
+                       (and (not auth-user-env) auth-password-env))
+                   (throw (ex-info "Both auth-user-env and auth-password-env must be supplied." 
+                                   {:http-output/auth-password-env auth-password-env
+                                    :http-output/auth-user-env auth-user-env}))
+                   :else
+                   args)
         serializer-fn (kw->fn (:http-output/serializer-fn task-map))
         success? (kw->fn (or (:http-output/success-fn task-map) ::success?-default))
         async-exception-info (atom {})]
-   (->JetWriterBatch client success? serializer-fn url args async-exception-info)))
+    (->JetWriterBatch client success? serializer-fn url args async-exception-info)))

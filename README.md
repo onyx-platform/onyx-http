@@ -68,6 +68,9 @@ A serializer-fn is also provided in case gzip requests need to be made, although
                     :headers {"content-type" "application/json"
                               "content-encoding" "gzip"}}
  :http-output/serializer-fn ::str->gzip
+ ;; Optional basic authentication settings
+ ;:http-output/auth-password-env "HTTP_USER_ENV"
+ ;:http-output/auth-user-env "HTTP_PASS_ENV"
  :onyx/n-peers 1
  :onyx/medium :http
  :onyx/batch-size 10
@@ -82,12 +85,14 @@ Lifecycle entry:
 ```
 #### Attributes
 
-|key                           | type      | description
-|------------------------------|-----------|------------
-|`:http-output/success-fn`     | `keyword` | Accepts response as argument, should return boolean to indicate if the response was successful. Request will be retried in case it wasn't a success.
-|`:http-output/args`           | `map`     | http-request args, see http://mpenet.github.io/jet/qbits.jet.client.http.html#var-request
-|`:http-output/url`            | `string`  | The url that the request will be made to
-|`:http-output/serializer-fn`  | `keyword` | Namespaced keyword pointing to a serializer fn that will be used to encode the body of the request.
+|key                             | type      | description
+|--------------------------------|-----------|------------
+|`:http-output/success-fn`       | `keyword` | Accepts response as argument, should return boolean to indicate if the response was successful. Request will be retried in case it wasn't a success.
+|`:http-output/args`             | `map`     | http-request args, see http://mpenet.github.io/jet/qbits.jet.client.http.html#var-request
+|`:http-output/url`              | `string`  | The url that the request will be made to
+|`:http-output/serializer-fn`    | `keyword` | Namespaced keyword pointing to a serializer fn that will be used to encode the body of the request.
+|`:http-output/auth-user-env`    | `string`  | String reference to an environment variable holding an username for basic authentication
+|`:http-output/auth-password-env`| `string`  | String reference to an environment variable holding a password for basic authentication
 
 #### Acknowledgements
 

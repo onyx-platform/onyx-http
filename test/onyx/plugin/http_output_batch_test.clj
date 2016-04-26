@@ -89,6 +89,8 @@
     :onyx/type :output
     :http-output/success-fn ::success?
     :http-output/url "http://localhost:41300/" 
+    ;:http-output/auth-user-env "hi"
+    ;:http-output/auth-password-env "hey"
     :http-output/args {:as :json
                        :headers {"content-type" "application/json"
                                  "content-encoding" "gzip"}}
