@@ -69,7 +69,15 @@
   (str "Basic " (.encodeToString (java.util.Base64/getEncoder)
                                  (.getBytes (str user ":" password) "UTF-8"))))
 
-(defrecord JetWriterBatch [client success? serializer-fn url args async-exception-info]
+(defn split-serializer [coll serializer-fn max-limit]
+  (loop [factor (count coll) 
+         partitions (map serializer-fn (partition-all factor coll))]
+    (if (some #(> (count %) max-limit) partitions)
+      (recur (/ factor 2)
+             (map serializer-fn (partition-all (/ factor 2) coll)))
+      (vector factor partitions))))
+
+(defrecord JetWriterBatch [client success? serializer-fn url args async-exception-info batch-byte-size]
   p-ext/Pipeline
   (read-batch [_ event]
     (onyx.peer.function/read-batch event))
@@ -77,21 +85,25 @@
   (write-batch
     [_ {:keys [onyx.core/results onyx.core/peer-replica-view onyx.core/messenger]
         :as event}]
-    (let [segments (map :message (mapcat :leaves (:tree results)))]
-      (when-not (empty? @async-exception-info)
-        (throw (ex-info "HTTP Request failed." @async-exception-info)))
-      (when-not (empty? segments)
-        (let [body (serializer-fn segments)]
-          (run! (fn [ack] (inc-count! ack)) (:acks results))
-          (let [ack-fn (fn []
-                         (run! (fn [ack]
-                                 (when (dec-count! ack)
-                                   (when-let [site (peer-site peer-replica-view (:completion-id ack))]
-                                     (extensions/internal-ack-segment messenger site ack)))) 
-                               (:acks results)))
-                async-exception-fn (fn [data] (reset! async-exception-info data))]
-            (process-message client url (assoc args :body body) success? ack-fn async-exception-fn))
-          {:http/written? true}))))
+    (when-not (empty? @async-exception-info)
+      (throw (ex-info "HTTP Request failed." @async-exception-info)))
+    (let [segments (map :message (mapcat :leaves (:tree results)))
+          [factor serialized-partitions] (split-serializer segments serializer-fn batch-byte-size)
+          ack-partitions (partition-all factor (:acks results))]
+      (assert (= (count segments) (count (:acks results))))
+      (run! (fn [ack] (inc-count! ack)) (:acks results))
+      (mapv (fn [serialized acks]
+              (let [ack-fn (fn []
+                             (run! (fn [ack]
+                                     (when (dec-count! ack)
+                                       (when-let [site (peer-site peer-replica-view (:completion-id ack))]
+                                         (extensions/internal-ack-segment messenger site ack)))) 
+                                   acks))
+                    async-exception-fn (fn [data] (reset! async-exception-info data))]
+                (process-message client url (assoc args :body serialized) success? ack-fn async-exception-fn)))
+            serialized-partitions
+            ack-partitions)
+      {:http/written? true}))
 
   (seal-resource [_ _]
     (.destroy client)
@@ -105,6 +117,7 @@
 (defn batch-output [{:keys [onyx.core/task-map] :as pipeline-data}]
   (let [client (http/client)
         {:keys [http-output/url http-output/args http-output/auth-user-env http-output/auth-password-env]} task-map
+        batch-byte-size (or (:http-output/batch-byte-size task-map) Integer/MAX_VALUE)
         args (cond (and auth-user-env auth-password-env)
                    (add-authorization args auth-user-env auth-password-env)
                    (or (and auth-user-env (not auth-password-env)) 
@@ -117,4 +130,4 @@
         serializer-fn (kw->fn (:http-output/serializer-fn task-map))
         success? (kw->fn (or (:http-output/success-fn task-map) ::success?-default))
         async-exception-info (atom {})]
-    (->JetWriterBatch client success? serializer-fn url args async-exception-info)))
+    (->JetWriterBatch client success? serializer-fn url args async-exception-info batch-byte-size)))
