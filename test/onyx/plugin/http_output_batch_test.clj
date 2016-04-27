@@ -31,24 +31,6 @@
 (def messages
   [{:a 1 :b 2}
    {:a 3 :b 3}
-   {:a 3 :b 3}
-   {:a 3 :b 3}
-   {:a 3 :b 3}
-   {:a 3 :b 3}
-   {:a 3 :b 3}
-   {:a 3 :b 4}
-   {:a 3 :b 3}
-   {:a 3 :b 3}
-   {:a 3 :b 3}
-   {:a 3 :b 3}
-   {:a 3 :b 3}
-   {:a 3 :b 3}
-   {:a 3 :b 3}
-   {:a 3 :b 3}
-   {:a 3 :b 3}
-   {:a 3 :b 3}
-   {:a 3 :b 3}
-   {:a 3 :b 3}
    :done])
 
 (def in-chan (chan (count messages)))
@@ -107,7 +89,6 @@
     :onyx/type :output
     :http-output/success-fn ::success?
     :http-output/url "http://localhost:41300/" 
-    :http-output/batch-byte-size 60
     ;:http-output/auth-user-env "hi"
     ;:http-output/auth-password-env "hey"
     :http-output/args {:as :json
@@ -116,7 +97,7 @@
     :http-output/serializer-fn ::str->gzip-utf8
     :onyx/n-peers 1
     :onyx/medium :http
-    :onyx/batch-size 1000
+    :onyx/batch-size 10
     :onyx/batch-timeout 50
     :onyx/doc "Sends http POST requests somewhere"}])
 
@@ -156,5 +137,4 @@
           _ (info "Stopped Jetty server")
           ]
       (is
-        (println "results " results)
         (= {:body "[{:a 1, :b 2} {:a 3, :b 3}]"} (first results))))))
