@@ -118,6 +118,8 @@
   (let [client (http/client)
         {:keys [http-output/url http-output/args http-output/auth-user-env http-output/auth-password-env]} task-map
         batch-byte-size (or (:http-output/batch-byte-size task-map) Integer/MAX_VALUE)
+        _ (when (:onyx/fn task-map)
+            (throw (Exception. ":onyx/fn cannot currently be supplied to this plugin batching by byte size.")))
         args (cond (and auth-user-env auth-password-env)
                    (add-authorization args auth-user-env auth-password-env)
                    (or (and auth-user-env (not auth-password-env)) 
