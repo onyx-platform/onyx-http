@@ -72,12 +72,13 @@
 (defn split-serializer [coll serializer-fn max-limit]
   (loop [factor (count coll) 
          partitions (map serializer-fn (partition-all factor coll))]
-    (if (some #(> (count %) max-limit) partitions)
+    (if (and (some #(> (count %) max-limit) partitions)
+             (> factor 1))
       (recur (/ factor 2)
              (map serializer-fn (partition-all (/ factor 2) coll)))
       (vector factor partitions))))
 
-(defrecord JetWriterBatch [client success? serializer-fn url args async-exception-info batch-byte-size]
+(defrecord JetWriterBatch [client success? serializer-fn compress-fn url args async-exception-info batch-byte-size]
   p-ext/Pipeline
   (read-batch [_ event]
     (onyx.peer.function/read-batch event))
@@ -100,7 +101,7 @@
                                          (extensions/internal-ack-segment messenger site ack)))) 
                                    acks))
                     async-exception-fn (fn [data] (reset! async-exception-info data))]
-                (process-message client url (assoc args :body serialized) success? ack-fn async-exception-fn)))
+                (process-message client url (assoc args :body (compress-fn serialized)) success? ack-fn async-exception-fn)))
             serialized-partitions
             ack-partitions)
       {:http/written? true}))
@@ -130,6 +131,7 @@
                    :else
                    args)
         serializer-fn (kw->fn (:http-output/serializer-fn task-map))
+        compress-fn (kw->fn (:http-output/compress-fn task-map))
         success? (kw->fn (or (:http-output/success-fn task-map) ::success?-default))
         async-exception-info (atom {})]
-    (->JetWriterBatch client success? serializer-fn url args async-exception-info batch-byte-size)))
+    (->JetWriterBatch client success? serializer-fn compress-fn url args async-exception-info batch-byte-size)))

@@ -18,7 +18,7 @@
     (.close gzos)
     (.toByteArray baos)))
 
-(def str->gzip-utf8 #(str->gzip (str (vec %)) "UTF-8"))
+(def str->gzip-utf8 #(str->gzip % "UTF-8"))
 
 (defn gzip->str [input-stream]
   (loop [reader (BufferedReader. (InputStreamReader. (GZIPInputStream. input-stream)))
@@ -94,7 +94,8 @@
     :http-output/args {:as :json
                        :headers {"content-type" "application/json"
                                  "content-encoding" "gzip"}}
-    :http-output/serializer-fn ::str->gzip-utf8
+    :http-output/compress-fn ::str->gzip-utf8
+    :http-output/serializer-fn :clojure.core/pr-str
     :onyx/n-peers 1
     :onyx/medium :http
     :onyx/batch-size 10
@@ -137,4 +138,4 @@
           _ (info "Stopped Jetty server")
           ]
       (is
-        (= {:body "[{:a 1, :b 2} {:a 3, :b 3}]"} (first results))))))
+        (= {:body "({:a 1, :b 2} {:a 3, :b 3})"} (first results))))))
