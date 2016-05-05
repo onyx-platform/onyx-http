@@ -7,7 +7,7 @@ Onyx plugin for http.
 In your project file:
 
 ```clojure
-[org.onyxplatform/onyx-http "0.9.4.0"]
+[org.onyxplatform/onyx-http "0.9.5.0"]
 ```
 
 In your peer boot-up namespace:
@@ -18,7 +18,7 @@ In your peer boot-up namespace:
 
 #### Functions
 
-##### sample-entry
+##### http-output
 
 Catalog entry:
 
@@ -50,6 +50,49 @@ Segments coming in to your http task are expected in a form such as:
 |------------------------------|-----------|------------
 |`:http-output/success-fn`     | `keyword` | Accepts response as argument, should return boolean to indicate if the response was successful. Request will be retried in case it wasn't a success.
 
+
+##### Batch http-output
+
+The batch http-output plugin will combine a batch's segments into a single http output request.
+
+As the segments can no longer be used for request parameters, these are instead supplied via the task-map. 
+A serializer-fn is also provided in case gzip requests need to be made, although :clojure.core/str will generally be used.
+
+```clojure
+{:onyx/name :your-task-name
+ :onyx/plugin :onyx.plugin.http-output/batch-output
+ :onyx/type :output
+ :http-output/success-fn ::success?
+ :http-output/url "http://localhost:41300/" 
+ :http-output/args {:as :json
+                    :headers {"content-type" "application/json"
+                              "content-encoding" "gzip"}}
+ :http-output/serializer-fn ::str->gzip
+ ;; Optional basic authentication settings
+ ;:http-output/auth-password-env "HTTP_USER_ENV"
+ ;:http-output/auth-user-env "HTTP_PASS_ENV"
+ :onyx/n-peers 1
+ :onyx/medium :http
+ :onyx/batch-size 10
+ :onyx/batch-timeout 50
+ :onyx/doc "Sends http POST requests somewhere"}
+```
+Lifecycle entry:
+
+```clojure
+[{:lifecycle/task :your-task-name
+  :lifecycle/calls :onyx.plugin.http/lifecycle-calls}]
+```
+#### Attributes
+
+|key                             | type      | description
+|--------------------------------|-----------|------------
+|`:http-output/success-fn`       | `keyword` | Accepts response as argument, should return boolean to indicate if the response was successful. Request will be retried in case it wasn't a success.
+|`:http-output/args`             | `map`     | http-request args, see http://mpenet.github.io/jet/qbits.jet.client.http.html#var-request
+|`:http-output/url`              | `string`  | The url that the request will be made to
+|`:http-output/serializer-fn`    | `keyword` | Namespaced keyword pointing to a serializer fn that will be used to encode the body of the request.
+|`:http-output/auth-user-env`    | `string`  | String reference to an environment variable holding an username for basic authentication
+|`:http-output/auth-password-env`| `string`  | String reference to an environment variable holding a password for basic authentication
 
 #### Acknowledgements
 
