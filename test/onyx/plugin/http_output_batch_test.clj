@@ -64,15 +64,23 @@
     (< status 400)
     (:success body)))
 
+(def statuses 
+  (atom [nil ;; sacrificial value that gets swapped away
+         500 500 500 200]))
+
 (defn async-handler [request]
   (let [ch (chan)]
     (go
-      (>! out-chan {:body (gzip->str (:body request))})
-      (>! ch
-        {:body "{\"success\": true}"
-         :headers {"Content-Type" "json"}
-         :status 200}))
+     (let [status (first (swap! statuses rest))]
+       (when (= status 200)
+         (>! out-chan {:body (gzip->str (:body request))}))
+       (>! ch
+           {:body "{\"success\": true}"
+            :headers {"Content-Type" "json"}
+            :status status})))
    ch))
+
+(def pending-timeout 180000)
 
 (def catalog
   [{:onyx/name :in
@@ -80,6 +88,7 @@
     :onyx/type :input
     :onyx/medium :core.async
     :onyx/max-peers 1
+    :onyx/pending-timeout pending-timeout
     :onyx/batch-size 10
     :onyx/batch-timeout 50
     :onyx/doc "Reads segments from a core.async channel"}
@@ -91,6 +100,9 @@
     :http-output/url "http://localhost:41300/" 
     ;:http-output/auth-user-env "hi"
     ;:http-output/auth-password-env "hey"
+    :http-output/retry-params {:base-sleep-ms 200
+                               :max-sleep-ms 30000
+                               :max-total-sleep-ms pending-timeout}
     :http-output/args {:as :json
                        :headers {"content-type" "application/json"
                                  "content-encoding" "gzip"}}
@@ -119,7 +131,8 @@
 
 (deftest writer-plugin-test
   (with-test-env [env [2 env-config peer-config]]
-    (let [job (onyx.api/submit-job peer-config job-conf)
+    (let [start-time (System/currentTimeMillis)
+          job (onyx.api/submit-job peer-config job-conf)
           _ (info "Starting Jetty server")
           server (qbits.jet.server/run-jetty {:ring-handler async-handler :port 41300
                                               :join? false})
@@ -135,7 +148,8 @@
           _ (info "Stopping Jetty server")
           _ (.stop server)
           _ (.destroy server)
-          _ (info "Stopped Jetty server")
-          ]
+          _ (info "Stopped Jetty server")]
       (is
-        (= {:body "({:a 1, :b 2} {:a 3, :b 3})"} (first results))))))
+        (= {:body "({:a 1, :b 2} {:a 3, :b 3})"} (first results)))
+      (is (< (System/currentTimeMillis) 
+             (+ pending-timeout (System/currentTimeMillis)))))))
