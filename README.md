@@ -32,13 +32,6 @@ Catalog entry:
  :onyx/doc "POST segments to http endpoint"}
 ```
 
-Lifecycle entry:
-
-```clojure
-[{:lifecycle/task :your-task-name
-  :lifecycle/calls :onyx.plugin.http/lifecycle-calls}]
-```
-
 Segments coming in to your http task are expected in a form such as:
 ```clojure
 {:url "http://localhost:41300/" :args {:body "a=1" :as :json}
@@ -77,12 +70,7 @@ A serializer-fn is also provided in case gzip requests need to be made, although
  :onyx/batch-timeout 50
  :onyx/doc "Sends http POST requests somewhere"}
 ```
-Lifecycle entry:
 
-```clojure
-[{:lifecycle/task :your-task-name
-  :lifecycle/calls :onyx.plugin.http/lifecycle-calls}]
-```
 #### Attributes
 
 |key                             | type      | description
