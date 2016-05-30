@@ -152,4 +152,4 @@
       (is
         (= {:body "({:a 1, :b 2} {:a 3, :b 3})"} (first results)))
       (is (< (System/currentTimeMillis) 
-             (+ pending-timeout (System/currentTimeMillis)))))))
+             (+ start-time pending-timeout))))))
