@@ -7,7 +7,7 @@ Onyx plugin for http.
 In your project file:
 
 ```clojure
-[org.onyxplatform/onyx-http "0.9.6.1-SNAPSHOT"]
+[org.onyxplatform/onyx-http "0.9.7.0-alpha12"]
 ```
 
 In your peer boot-up namespace:
