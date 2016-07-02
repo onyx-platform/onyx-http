@@ -1,4 +1,4 @@
-(defproject org.onyxplatform/onyx-http "0.9.7.0-alpha17"
+(defproject org.onyxplatform/onyx-http "0.9.7.0-alpha18"
   :description "Onyx plugin for HTTP"
   :url "https://github.com/onyx-platform/onyx-http"
   :repositories {"snapshots" {:url "https://clojars.org/repo"
@@ -14,7 +14,7 @@
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :dependencies [[org.clojure/clojure "1.7.0"]
                  ^{:voom {:repo "git@github.com:onyx-platform/onyx.git" :branch "master"}}
-                 [org.onyxplatform/onyx "0.9.7-alpha17"]
+                 [org.onyxplatform/onyx "0.9.7-alpha18"]
                  [cc.qbits/jet "0.7.3"]]
   :profiles {:dev {:dependencies []
                    :plugins [[lein-set-version "0.4.1"]
