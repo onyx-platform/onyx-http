@@ -14,7 +14,7 @@
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :dependencies [[org.clojure/clojure "1.7.0"]
                  ^{:voom {:repo "git@github.com:onyx-platform/onyx.git" :branch "master"}}
-                 [org.onyxplatform/onyx "0.9.8-20160707_060808-g5e75a51"]
+                 [org.onyxplatform/onyx "0.9.8-20160708_132817-g900dafe"]
                  [cc.qbits/jet "0.7.3"]]
   :profiles {:dev {:dependencies []
                    :plugins [[lein-set-version "0.4.1"]
