@@ -5,7 +5,7 @@
             [onyx.peer.function :as function]
             [onyx.peer.operation :refer [kw->fn]]
             [onyx.peer.pipeline-extensions :as p-ext]
-            [onyx.static.default-vals :refer [defaults arg-or-default]]
+            [onyx.static.default-vals :refer [arg-or-default]]
             [onyx.types :as t :refer [dec-count! inc-count!]]
             [qbits.jet.client.http :as http]
             [taoensso.timbre :refer [debug info error] :as timbre]))
