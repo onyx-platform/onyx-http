@@ -28,6 +28,9 @@ Catalog entry:
  :onyx/type :output
  :onyx/medium :http
  :http-output/success-fn :my.namespace/success?
+ :http-output/retry-params {:base-sleep-ms 200
+                            :max-sleep-ms 30000
+                            :max-total-sleep-ms 3600000}
  :onyx/batch-size batch-size
  :onyx/doc "POST segments to http endpoint"}
 ```
@@ -42,7 +45,7 @@ Segments coming in to your http task are expected in a form such as:
 |key                           | type      | description
 |------------------------------|-----------|------------
 |`:http-output/success-fn`     | `keyword` | Accepts response as argument, should return boolean to indicate if the response was successful. Request will be retried in case it wasn't a success.
-
+|`:http-output/retry-params`   | `map`     | Accepts a map of three keys: `:base-sleep-ms` is a delay for a first retry, `:max-sleep-ms` is a maximum retry delay, and `:max-total-sleep-ms` is amount of time when request should be not retried anymore.
 
 ##### Batch http-output
 
