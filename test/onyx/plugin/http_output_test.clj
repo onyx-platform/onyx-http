@@ -1,24 +1,34 @@
 (ns onyx.plugin.http-output-test
-  (:require [clojure.core.async :refer [go chan >! >!! <!! close!]]
-            [clojure.test :refer [deftest is]]
-            [taoensso.timbre :refer [info]]
+  (:require [clojure.core.async :as a :refer [go chan >! >!! <!! close!]]
+            [clojure.test :refer [deftest is thrown-with-msg?]]
+            [taoensso.timbre :as log]
+            [aleph.http :as http]
+            [byte-streams :as bs]
+            [cheshire.core :as json]
+
+            [onyx.api]
             [onyx.test-helper :refer [with-test-env]]
             [onyx.plugin.core-async :refer [take-segments!]]
-            [onyx.plugin.http-output]
-            [qbits.jet.server]
-            [onyx.api]))
+            [onyx.plugin.http-output])
+  (:import [org.apache.log4j Logger Level]))
+
+(-> (Logger/getLogger "io.netty") (.setLevel Level/INFO))
+
 
 (def messages
-  [{:url "http://localhost:41300/" :args {:body "a=1" :as :json}}
-   {:url "http://localhost:41300/" :args {:body "b=2" :as :json}}
-   {:url "http://localhost:41300/" :args {:body "c=3" :as :json}}
-   :done])
+  [{:method :post :url "http://localhost:41300/" :args {:body "a=1" :as :json}}
+   {:method :post :url "http://localhost:41300/" :args {:body "b=2" :as :json}}
+   {:method :post :url "http://localhost:41300/" :args {:body "c=3" :as :json}}])
 
-(def in-chan (chan (count messages)))
-(def out-chan (chan (count messages)))
+(def in-buffer (atom nil))
+(def in-chan (atom nil))
+(def out-chan (atom nil))
+(def req-count (atom nil))
+(def server (atom nil))
 
 (defn inject-in-ch [event lifecycle]
-  {:core.async/chan in-chan})
+  {:core.async/chan @in-chan
+   :core.async/buffer in-buffer})
 
 (def in-calls
   {:lifecycle/before-task-start inject-in-ch})
@@ -45,15 +55,28 @@
     (< status 400)
     (:success body)))
 
+(defn post-process [message response]
+  (>!! @out-chan (-> message :args :body)))
+
 (defn async-handler [request]
-  (let [ch (chan)]
-    (go
-      (>! out-chan {:body (slurp (:body request))})
-      (>! ch
-        {:body "{\"success\": true}"
-         :headers {"Content-Type" "json"}
-         :status 200}))
-   ch))
+  (let [id      (bs/to-string (:body request))
+        attempt (get @req-count id 0)]
+
+    (cond
+      (and (= id "b=2") (< attempt 2))
+      (do
+        (swap! req-count update id (fnil inc 0))
+        {:body   "retry"
+         :status 500})
+
+      (= id "c=3")
+      {:body   "fail"
+       :status 400}
+
+      :else
+      {:body    (json/generate-string {:success true})
+       :headers {"Content-Type" "application/json"}
+       :status  200})))
 
 (def catalog
   [{:onyx/name :in
@@ -69,6 +92,10 @@
     :onyx/plugin :onyx.plugin.http-output/output
     :onyx/type :output
     :http-output/success-fn ::success?
+    :http-output/post-process-fn ::post-process
+    :http-output/retry-params {:base-sleep-ms 100
+                               :max-sleep-ms 500
+                               :max-total-sleep-ms 1000}
     :onyx/n-peers 1
     :onyx/medium :http
     :onyx/batch-size 10
@@ -91,24 +118,31 @@
    :task-scheduler :onyx.task-scheduler/balanced})
 
 (deftest writer-plugin-test
+  (when @server
+    (.close @server))
+  (reset! in-buffer {})
+  (reset! in-chan (chan (count messages)))
+  (reset! out-chan (chan (count messages)))
+  (reset! req-count {})
+
   (with-test-env [env [2 env-config peer-config]]
-    (let [job (onyx.api/submit-job peer-config job-conf)
-          _ (info "Starting Jetty server")
-          server (qbits.jet.server/run-jetty {:ring-handler async-handler :port 41300
-                                              :join? false})
-          _ (info "Started Jetty server")
-          _ (doseq [v messages]
-              (>!! in-chan v))
-          _ (close! in-chan)
-          _ (info "Awaiting job completion")
-          _ (onyx.api/await-job-completion peer-config (:job-id job))
-          _ (info "Job completed")
-          _ (>!! out-chan :done) ;; for take-segments!
-          results (take-segments! out-chan)
-          _ (info "Stopping Jetty server")
-          _ (.stop server)
-          _ (.destroy server)
-          _ (info "Stopped Jetty server")
-          ]
-      (is
-        (= (set results) #{{:body "a=1"} {:body "b=2"} {:body "c=3"} :done})))))
+    (let [job (onyx.api/submit-job peer-config job-conf)]
+      (reset! server (http/start-server async-handler {:port 41300}))
+
+      (doseq [v messages]
+        (>!! @in-chan v))
+      (close! @in-chan)
+
+      (let [exc (try
+                  (onyx.test-helper/feedback-exception! peer-config (:job-id job))
+                  (catch Exception e
+                    (ex-data e)))]
+        (is (= (select-keys exc [:method :url :args])
+              {:method :post :url "http://localhost:41300/" :args {:body "c=3" :as :json}})))
+
+      (onyx.api/await-job-completion peer-config (:job-id job))
+      (.close @server)
+
+      (let [results (take-segments! @out-chan 100)]
+        (is (= (set results)
+              #{"a=1" "b=2"}))))))

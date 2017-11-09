@@ -28,6 +28,9 @@ Catalog entry:
  :onyx/type :output
  :onyx/medium :http
  :http-output/success-fn :my.namespace/success?
+ :http-output/retry-params {:base-sleep-ms 200
+                            :max-sleep-ms 30000
+                            :max-total-sleep-ms 3600000}
  :onyx/batch-size batch-size
  :onyx/doc "POST segments to http endpoint"}
 ```
@@ -39,53 +42,15 @@ Segments coming in to your http task are expected in a form such as:
 
 #### Attributes
 
-|key                           | type      | description
-|------------------------------|-----------|------------
-|`:http-output/success-fn`     | `keyword` | Accepts response as argument, should return boolean to indicate if the response was successful. Request will be retried in case it wasn't a success.
-
-
-##### Batch http-output
-
-The batch http-output plugin will combine a batch's segments into a single http output request.
-
-As the segments can no longer be used for request parameters, these are instead supplied via the task-map. 
-A serializer-fn is also provided in case gzip requests need to be made, although :clojure.core/str will generally be used.
-
-```clojure
-{:onyx/name :your-task-name
- :onyx/plugin :onyx.plugin.http-output/batch-output
- :onyx/type :output
- :http-output/success-fn ::success?
- :http-output/url "http://localhost:41300/" 
- :http-output/args {:as :json
-                    :headers {"content-type" "application/json"
-                              "content-encoding" "gzip"}}
- :http-output/serializer-fn ::str->gzip
- ;; Optional basic authentication settings
- ;:http-output/auth-password-env "HTTP_USER_ENV"
- ;:http-output/auth-user-env "HTTP_PASS_ENV"
- :onyx/n-peers 1
- :onyx/medium :http
- :onyx/batch-size 10
- :onyx/batch-timeout 50
- :onyx/doc "Sends http POST requests somewhere"}
-```
-
-#### Attributes
-
-|key                             | type      | description
-|--------------------------------|-----------|------------
-|`:http-output/success-fn`       | `keyword` | Accepts response as argument, should return boolean to indicate if the response was successful. Request will be retried in case it wasn't a success.
-|`:http-output/args`             | `map`     | http-request args, see http://mpenet.github.io/jet/qbits.jet.client.http.html#var-request
-|`:http-output/url`              | `string`  | The url that the request will be made to
-|`:http-output/serializer-fn`    | `keyword` | Namespaced keyword pointing to a serializer fn that will be used to encode the body of the request.
-|`:http-output/auth-user-env`    | `string`  | String reference to an environment variable holding an username for basic authentication
-|`:http-output/auth-password-env`| `string`  | String reference to an environment variable holding a password for basic authentication
+|key                            | type      | description
+|-------------------------------|-----------|------------
+|`:http-output/success-fn`      | `keyword` | Function, which accepts response as an argument, should return boolean to indicate if the response was successful.
+|`:http-output/post-process-fn` | `keyword` | Function, accepts `:onyx.core/params`, message and response (in that order) to perform any side-effectful action
+|`:http-output/retry-params`    | `map`     | Indicates if request should be retried if it's not successful and parameters of retries. Map of three keys: `:base-sleep-ms` is a delay for a first retry, `:max-sleep-ms` is a maximum retry delay, and `:max-total-sleep-ms` is amount of time when request should be not retried anymore.
 
 #### Acknowledgements
 
-Many thanks to [Vsevolod Solovyov](Vsevolod Solovyo://github.com/vsolovyov) for contributing this plugin to Onyx Platform.
-
+Many thanks to [Vsevolod Solovyov](https://github.com/vsolovyov) for contributing this plugin to Onyx Platform.
 
 #### Contributing
 
