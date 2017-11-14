@@ -71,6 +71,9 @@
               :else
               (async-exception-fn response))))))))
 
+(defn check-exception! [async-exception-info]
+  (when (not-empty @async-exception-info)
+    (throw (ex-info "HTTP request failed!" @async-exception-info))))
 
 (deftype HttpOutput [success? post-process retry-params
                      ^:unsynchronized-mutable async-exception-info
@@ -81,12 +84,10 @@
 
   p/BarrierSynchronization
   (synced? [this epoch]
-    (when (not-empty @async-exception-info)
-      (throw (ex-info "HTTP request failed!" @async-exception-info)))
+    (check-exception! async-exception-info)
     (zero? @in-flight-writes))
   (completed? [this]
-    (when (not-empty @async-exception-info)
-      (throw (ex-info "HTTP request failed!" @async-exception-info)))
+    (check-exception! async-exception-info)
     (zero? @in-flight-writes))
 
   p/Checkpointed
@@ -101,10 +102,8 @@
 
   p/Output
   (prepare-batch [this event _ _] true)
-  (write-batch [this {:keys [onyx.core/results onyx.core/params] :as event} _ _]
-    (when (not-empty @async-exception-info)
-      (throw (ex-info "HTTP request failed!" @async-exception-info)))
-
+  (write-batch [this {:keys [onyx.core/write-batch onyx.core/params] :as event} _ _]
+    (check-exception! async-exception-info)
     (let [ack-fn             #(swap! in-flight-writes dec)
           async-exception-fn #(reset! async-exception-info %)
           retry              (assoc retry-params :initial-request-time
@@ -114,8 +113,7 @@
               (swap! in-flight-writes inc)
               (process-message message
                 success? post-process ack-fn async-exception-fn retry))
-        (mapcat :leaves (:tree results))))
-
+            write-batch))
     true))
 
 

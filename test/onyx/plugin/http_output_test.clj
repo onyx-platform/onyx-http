@@ -1,6 +1,6 @@
 (ns onyx.plugin.http-output-test
   (:require [clojure.core.async :as a :refer [go chan >! >!! <!! close!]]
-            [clojure.test :refer [deftest is thrown-with-msg?]]
+            [clojure.test :refer [deftest is]]
             [taoensso.timbre :as log]
             [aleph.http :as http]
             [byte-streams :as bs]
