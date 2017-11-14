@@ -1,4 +1,4 @@
-(defproject org.onyxplatform/onyx-http "0.9.15.1-SNAPSHOT"
+(defproject org.onyxplatform/onyx-http "0.11.1.0-SNAPSHOT"
   :description "Onyx plugin for HTTP"
   :url "https://github.com/onyx-platform/onyx-http"
   :repositories {"snapshots" {:url "https://clojars.org/repo"
@@ -12,11 +12,12 @@
 
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
-  :dependencies [[org.clojure/clojure "1.7.0"]
+  :dependencies [[org.clojure/clojure "1.8.0"]
                  ^{:voom {:repo "git@github.com:onyx-platform/onyx.git" :branch "master"}}
-                 [org.onyxplatform/onyx "0.9.15"]
-                 [cc.qbits/jet "0.7.3"]]
-  :profiles {:dev {:dependencies []
+                 [org.onyxplatform/onyx "0.11.1"]
+                 [aleph "0.4.4"]
+                 [io.netty/netty-all "4.1.12.Final"]]
+  :profiles {:dev {:dependencies [[cheshire "5.8.0"]]
                    :plugins [[lein-set-version "0.4.1"]
                              [lein-update-dependency "0.1.2"]
                              [lein-pprint "1.1.1"]]}
