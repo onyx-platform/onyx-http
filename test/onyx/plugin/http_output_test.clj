@@ -132,7 +132,7 @@
 
       (>!! @in-chan (nth messages 0))
       (>!! @in-chan (nth messages 1))
-      (Thread/sleep 10000)
+      (Thread/sleep 20000)
       (>!! @in-chan (nth messages 2))
       (close! @in-chan)
 
