@@ -1,154 +1,135 @@
 (ns onyx.plugin.http-output
-  (:require [clojure.core.async :as async :refer [<!! <! go timeout]]
-            [onyx.extensions :as extensions]
-            [onyx.log.commands.peer-replica-view :refer [peer-site]]
-            [onyx.peer.function :as function]
-            [onyx.peer.pipeline-extensions :as p-ext]
-            [onyx.static.util :refer [kw->fn]]
-            [onyx.static.default-vals :refer [arg-or-default]]
-            [onyx.types :as t :refer [dec-count! inc-count!]]
-            [qbits.jet.client.http :as http]
-            [taoensso.timbre :refer [debug info error] :as timbre])
-  (:import [java.util Random])) 
+  (:require [onyx.static.util :refer [kw->fn]]
+            [onyx.plugin.protocols :as p]
+            [taoensso.timbre :as log]
+            [aleph.http :as http]
+            [manifold.deferred :as d])
+  (:import [java.util Random]))
 
-(defn- process-message [client url args success? ack-fn async-exception-fn retry-params]
-  (go
-    (try
-     (let [rch (http/post client url args)
-           response (<! rch)
-           result (if (:error response)
-                    :failure
-                    (let [body (<! (:body response))
-                          fetched (assoc response :body body)]
-                      (if (success? fetched)
-                        (do
-                         (ack-fn)
-                         :success)
-                        :failure)))]
-       (when (and (= result :failure) (:allow-retry? retry-params))
-         (let [{:keys [retry-attempt base-sleep-ms max-sleep-ms max-total-sleep-ms initial-request-time]} retry-params
-               fuzzy-multiplier (min (max (+ 1.0 (* 0.2 (.nextGaussian (Random.)))) 0) 2)
-               next-backoff-ms (int (min max-sleep-ms (* base-sleep-ms (Math/pow 2 retry-attempt) fuzzy-multiplier)))
-               ;; Cut-off at maximum retry-cutoff-time. 
-               ;; This is useful because the segment will be retried by onyx automatically after :onyx/max-pending-time anyway
-               retry? (< (+ (System/currentTimeMillis) next-backoff-ms) (+ initial-request-time max-total-sleep-ms))]
-           (error "Request failed" {:url url :args args :response response :retry? retry? :retry-attempt retry-attempt :backoff-ms next-backoff-ms})
-           (when retry?
-             (<! (timeout next-backoff-ms))
-             (process-message client url args success? ack-fn async-exception-fn (assoc retry-params :retry-attempt (inc retry-attempt)))))))
-      (catch Exception e
-        (async-exception-fn {:url url :args args :exception e})))))
 
-(defrecord JetWriter [client success? async-exception-info]
-  p-ext/Pipeline
-  (read-batch [_ event]
-    (onyx.peer.function/read-batch event))
+(defn next-backoff [attempt params]
+  (when (:allow-retry? params)
+    (let [fuzzy-multiplier (min (max (+ 1.0 (* 0.2 (.nextGaussian (Random.)))) 0) 2)
+          next-backoff-ms  (int (min (:max-sleep-ms params)
+                                  (* (:base-sleep-ms params)
+                                    (Math/pow 2 attempt)
+                                    fuzzy-multiplier)))]
+      (when (< (+ (System/currentTimeMillis) next-backoff-ms)
+               (+ (:initial-request-time params) (:max-total-sleep-ms params)))
+        next-backoff-ms))))
 
-  ;; written after onyx-bookkeeper plugin
-  (write-batch
-    [_ {:keys [onyx.core/results onyx.core/peer-replica-view onyx.core/messenger]
-        :as event}]
-    (when-not (empty? @async-exception-info)
-      (throw (ex-info "HTTP Request failed." @async-exception-info)))
-    (doall
-      (map (fn [[result ack]]
-             (run! (fn [_] (inc-count! ack)) (:leaves result))
-             (let [ack-fn (fn []
-                            (when (dec-count! ack)
-                              (when-let [site (peer-site peer-replica-view (:completion-id ack))]
-                                (extensions/internal-ack-segment messenger site ack))))
-                   async-exception-fn (fn [data] (reset! async-exception-info data))]
-               (run! (fn [leaf]
-                       (let [message (:message leaf)] 
-                         (process-message client (:url message) (:args message) success? ack-fn async-exception-fn {:allow-retry? false})))
-                 (:leaves result))))
-        (map list (:tree results) (:acks results))))
-    {:http/written? true})
 
-  (seal-resource [_ _]
-    (.destroy client)
-    {}))
+(defn http-request [method url args success? async-exception-fn]
+  (-> (http/request (assoc args
+                      :request-method method
+                      :url url))
+
+      (d/chain
+        (fn [response]
+          (if (success? response)
+            [true response]
+            [false {:method method :url url :args args
+                    :response response}])))
+
+      (d/catch Exception
+          (fn [e]
+            [false {:method method :url url :args args
+                    :exception (pr-str e)}]))))
+
+
+(defn process-message [message success? post-process ack-fn async-exception-fn retry-params]
+  "Retry params:
+   - allow-retry? - if we will retry or not
+   - initial-request-time - time of first request
+   - base-sleep-ms - ...
+   - max-sleep-ms - ...
+   - max-total-sleep-ms - ..."
+  (let [{:keys [method url args]
+         :or   {method :post}} message]
+    (d/loop [attempt 0]
+      (log/infof "Making HTTP request: %S %s %.30s attempt %d"
+        (name method) url args attempt)
+      (d/chain
+        (http-request method url args success? async-exception-fn)
+
+        (fn [[is-successful response]]
+          (let [next-backoff-ms (next-backoff attempt retry-params)]
+            (cond
+              is-successful
+              (do
+                (when post-process
+                  (post-process message response))
+                (ack-fn))
+
+              next-backoff-ms
+              (do
+                (log/debugf "Backing off HTTP request: %S %s %.30s next retry in %d ms"
+                  (name method) url args next-backoff-ms)
+                (Thread/sleep next-backoff-ms)
+                (d/recur (inc attempt)))
+
+              :else
+              (async-exception-fn response))))))))
+
+(defn check-exception! [async-exception-info]
+  (when (not-empty @async-exception-info)
+    (throw (ex-info "HTTP request failed!" @async-exception-info))))
+
+(deftype HttpOutput [success? post-process retry-params
+                     ^:unsynchronized-mutable async-exception-info
+                     ^:unsynchronized-mutable in-flight-writes]
+  p/Plugin
+  (start [this event] this)
+  (stop [this event] this)
+
+  p/BarrierSynchronization
+  (synced? [this epoch]
+    (check-exception! async-exception-info)
+    (zero? @in-flight-writes))
+  (completed? [this]
+    (check-exception! async-exception-info)
+    (zero? @in-flight-writes))
+
+  p/Checkpointed
+  (recover! [this replica-version checkpointed]
+    ;; need a whole new atom so async writes from before the recover
+    ;; don't alter the counter
+    (set! in-flight-writes (atom 0))
+    (set! async-exception-info (atom nil))
+    this)
+  (checkpoint [this])
+  (checkpointed! [this epoch])
+
+  p/Output
+  (prepare-batch [this event _ _] true)
+  (write-batch [this {:keys [onyx.core/write-batch onyx.core/params] :as event} _ _]
+    (check-exception! async-exception-info)
+    (let [ack-fn             #(swap! in-flight-writes dec)
+          async-exception-fn #(reset! async-exception-info %)
+          retry              (assoc retry-params :initial-request-time
+                               (System/currentTimeMillis))
+          post-process       (apply partial post-process params)]
+      (run! (fn [message]
+              (swap! in-flight-writes inc)
+              (process-message message
+                success? post-process ack-fn async-exception-fn retry))
+            write-batch))
+    true))
+
 
 (defn success?-default [{:keys [status]}]
   (< status 500))
 
+
+(defn post-process-default [& args]
+  nil)
+
+
 (defn output [{:keys [onyx.core/task-map] :as pipeline-data}]
-  (let [client (http/client)
-        success? (kw->fn (or (:http-output/success-fn task-map) ::success?-default))
-        async-exception-info (atom {})]
-   (->JetWriter client success? async-exception-info)))
-
-(defn basic-auth-header [user password]
-  (str "Basic " (.encodeToString (java.util.Base64/getEncoder)
-                                 (.getBytes (str user ":" password) "UTF-8"))))
-
-(defn split-serializer [coll serializer-fn max-limit]
-  (loop [factor (count coll) 
-         partitions (map serializer-fn (partition-all factor coll))]
-    (if (and (some #(> (count %) max-limit) partitions)
-             (> factor 1))
-      (recur (/ factor 2)
-             (map serializer-fn (partition-all (/ factor 2) coll)))
-      (vector factor partitions))))
-
-(defrecord JetWriterBatch [client success? serializer-fn compress-fn url args async-exception-info batch-byte-size retry-params]
-  p-ext/Pipeline
-  (read-batch [_ event]
-    (onyx.peer.function/read-batch event))
-
-  (write-batch
-    [_ {:keys [onyx.core/results onyx.core/peer-replica-view onyx.core/messenger]
-        :as event}]
-    (when-not (empty? @async-exception-info)
-      (throw (ex-info "HTTP Request failed." @async-exception-info)))
-    (let [segments (map :message (mapcat :leaves (:tree results)))
-          [factor serialized-partitions] (split-serializer segments serializer-fn batch-byte-size)
-          ack-partitions (partition-all factor (:acks results))
-          retry (assoc retry-params :initial-request-time (System/currentTimeMillis))]
-      (assert (= (count segments) (count (:acks results))))
-      (run! (fn [ack] (inc-count! ack)) (:acks results))
-      (mapv (fn [serialized acks]
-              (let [ack-fn (fn []
-                             (run! (fn [ack]
-                                     (when (dec-count! ack)
-                                       (when-let [site (peer-site peer-replica-view (:completion-id ack))]
-                                         (extensions/internal-ack-segment messenger site ack)))) 
-                                   acks))
-                    async-exception-fn (fn [data] (reset! async-exception-info data))]
-                (process-message client url (assoc args :body (compress-fn serialized)) success? ack-fn async-exception-fn retry)))
-            serialized-partitions
-            ack-partitions)
-      {:http/written? true}))
-
-  (seal-resource [_ _]
-    (.destroy client)
-    {}))
-
-(defn add-authorization [args auth-user-env auth-password-env]
-  (let [auth-user (System/getenv auth-user-env)
-        auth-password (System/getenv auth-password-env)]
-    (assoc-in args [:headers "Authorization"] (basic-auth-header auth-user auth-password))))
-
-(defn batch-output [{:keys [onyx.core/task-map] :as pipeline-data}]
-  (let [client (http/client)
-        {:keys [http-output/url http-output/args http-output/auth-user-env http-output/auth-password-env]} task-map
-        batch-byte-size (or (:http-output/batch-byte-size task-map) Integer/MAX_VALUE)
-        _ (when (:onyx/fn task-map)
-            (throw (Exception. ":onyx/fn cannot currently be supplied to this plugin batching by byte size.")))
-        args (cond (and auth-user-env auth-password-env)
-                   (add-authorization args auth-user-env auth-password-env)
-                   (or (and auth-user-env (not auth-password-env)) 
-                       (and (not auth-user-env) auth-password-env))
-                   (throw (ex-info "Both auth-user-env and auth-password-env must be supplied." 
-                                   {:http-output/auth-password-env auth-password-env
-                                    :http-output/auth-user-env auth-user-env}))
-                   :else
-                   args)
-        serializer-fn (kw->fn (:http-output/serializer-fn task-map))
-        compress-fn (kw->fn (:http-output/compress-fn task-map))
-        success? (kw->fn (or (:http-output/success-fn task-map) ::success?-default))
-        async-exception-info (atom {})
-        retry-params (if-let [retry-params (:http-output/retry-params task-map)]
-                       (assoc retry-params :allow-retry? true :retry-attempt 0)
-                       {:allow-retry? false})]
-    (->JetWriterBatch client success? serializer-fn compress-fn url args async-exception-info batch-byte-size retry-params)))
+  (let [success?     (kw->fn (or (:http-output/success-fn task-map)
+                                 ::success?-default))
+        post-process (kw->fn (or (:http-output/post-process-fn task-map)
+                                 ::post-process-default))
+        retry-params (:http-output/retry-params task-map)
+        retry-params (assoc retry-params :allow-retry? (some? retry-params))]
+    (->HttpOutput success? post-process retry-params (atom nil) (atom 0))))
