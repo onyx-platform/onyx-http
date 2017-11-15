@@ -127,11 +127,13 @@
 
   (with-test-env [env [2 env-config peer-config]]
     (let [_ (reset! server (http/start-server async-handler {:port 41300}))
-          _ (Thread/sleep 4000)
+          _ (Thread/sleep 500)
           job (onyx.api/submit-job peer-config job-conf)]
 
-      (doseq [v messages]
-        (>!! @in-chan v))
+      (>!! @in-chan (nth messages 0))
+      (>!! @in-chan (nth messages 1))
+      (Thread/sleep 10000)
+      (>!! @in-chan (nth messages 2))
       (close! @in-chan)
 
       (let [exc (try
