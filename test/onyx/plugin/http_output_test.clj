@@ -126,9 +126,9 @@
   (reset! req-count {})
 
   (with-test-env [env [2 env-config peer-config]]
-    (let [job (onyx.api/submit-job peer-config job-conf)]
-      (reset! server (http/start-server async-handler {:port 41300}))
-      (Thread/sleep 2000)
+    (let [_ (reset! server (http/start-server async-handler {:port 41300}))
+          _ (Thread/sleep 4000)
+          job (onyx.api/submit-job peer-config job-conf)]
 
       (doseq [v messages]
         (>!! @in-chan v))
