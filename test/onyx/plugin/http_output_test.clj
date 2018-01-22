@@ -61,8 +61,11 @@
 (defn async-handler [request]
   (let [id      (bs/to-string (:body request))
         attempt (get @req-count id 0)]
+    {:body    (json/generate-string {:success true})
+     :headers {"Content-Type" "application/json"}
+     :status  200}
 
-    (cond
+    #_(cond
       (and (= id "b=2") (< attempt 2))
       (do
         (swap! req-count update id (fnil inc 0))
