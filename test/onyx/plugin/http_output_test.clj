@@ -136,7 +136,7 @@
       (>!! @in-chan (nth messages 0))
       (>!! @in-chan (nth messages 1))
       (Thread/sleep 30000)
-      (>!! @in-chan (nth messages 2))
+      ;(>!! @in-chan (nth messages 2))
       (close! @in-chan)
 
       #_(let [exc (try
