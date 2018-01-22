@@ -136,7 +136,7 @@
       (>!! @in-chan (nth messages 2))
       (close! @in-chan)
 
-      (let [exc (try
+      #_(let [exc (try
                   (onyx.test-helper/feedback-exception! peer-config (:job-id job))
                   (catch Exception e
                     (ex-data e)))]
