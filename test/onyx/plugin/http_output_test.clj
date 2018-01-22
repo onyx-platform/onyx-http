@@ -99,7 +99,7 @@
     :onyx/n-peers 1
     :onyx/medium :http
     :onyx/batch-size 10
-    :onyx/batch-timeout 50
+    :onyx/batch-timeout 1
     :onyx/doc "Sends http POST requests somewhere"}])
 
 (def lifecycles
@@ -127,12 +127,12 @@
 
   (with-test-env [env [2 env-config peer-config]]
     (let [_ (reset! server (http/start-server async-handler {:port 41300}))
-          _ (Thread/sleep 2000)
+          _ (Thread/sleep 1000)
           job (onyx.api/submit-job peer-config job-conf)]
 
       (>!! @in-chan (nth messages 0))
       (>!! @in-chan (nth messages 1))
-      (Thread/sleep 20000)
+      (Thread/sleep 30000)
       (>!! @in-chan (nth messages 2))
       (close! @in-chan)
 
