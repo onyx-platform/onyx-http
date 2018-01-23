@@ -61,11 +61,8 @@
 (defn async-handler [request]
   (let [id      (bs/to-string (:body request))
         attempt (get @req-count id 0)]
-    {:body    (json/generate-string {:success true})
-     :headers {"Content-Type" "application/json"}
-     :status  200}
 
-    #_(cond
+    (cond
       (and (= id "b=2") (< attempt 2))
       (do
         (swap! req-count update id (fnil inc 0))
@@ -102,7 +99,7 @@
     :onyx/n-peers 1
     :onyx/medium :http
     :onyx/batch-size 10
-    :onyx/batch-timeout 1
+    :onyx/batch-timeout 50
     :onyx/doc "Sends http POST requests somewhere"}])
 
 (def lifecycles
@@ -130,16 +127,16 @@
 
   (with-test-env [env [2 env-config peer-config]]
     (let [_ (reset! server (http/start-server async-handler {:port 41300}))
-          _ (Thread/sleep 1000)
+          _ (Thread/sleep 500)
           job (onyx.api/submit-job peer-config job-conf)]
 
       (>!! @in-chan (nth messages 0))
       (>!! @in-chan (nth messages 1))
-      (Thread/sleep 30000)
-      ;(>!! @in-chan (nth messages 2))
+      (Thread/sleep 20000)
+      (>!! @in-chan (nth messages 2))
       (close! @in-chan)
 
-      #_(let [exc (try
+      (let [exc (try
                   (onyx.test-helper/feedback-exception! peer-config (:job-id job))
                   (catch Exception e
                     (ex-data e)))]
