@@ -61,6 +61,7 @@
 (defn async-handler [request]
   (let [id      (bs/to-string (:body request))
         attempt (get @req-count id 0)]
+    (println "REQCOUNT" @req-count)
 
     (cond
       (and (= id "b=2") (< attempt 2))
