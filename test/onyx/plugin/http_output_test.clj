@@ -63,11 +63,11 @@
         attempt (get @req-count id 0)]
 
     (cond
-      (and (= id "b=2") (< attempt 2))
-      (do
-        (swap! req-count update id (fnil inc 0))
-        {:body   "retry"
-         :status 500})
+      ; (and (= id "b=2") (< attempt 2))
+      ; (do
+      ;   (swap! req-count update id (fnil inc 0))
+      ;   {:body   "retry"
+      ;    :status 500})
 
       (= id "c=3")
       {:body   "fail"
@@ -85,7 +85,7 @@
     :onyx/medium :core.async
     :onyx/max-peers 1
     :onyx/batch-size 10
-    :onyx/batch-timeout 5
+    :onyx/batch-timeout 1
     :onyx/doc "Reads segments from a core.async channel"}
 
    {:onyx/name :do-requests
@@ -99,7 +99,7 @@
     :onyx/n-peers 1
     :onyx/medium :http
     :onyx/batch-size 10
-    :onyx/batch-timeout 5
+    :onyx/batch-timeout 1
     :onyx/doc "Sends http POST requests somewhere"}])
 
 (def lifecycles
