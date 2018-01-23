@@ -63,11 +63,11 @@
         attempt (get @req-count id 0)]
 
     (cond
-      (and (= id "b=2") (< attempt 2))
-      (do
-        (swap! req-count update id (fnil inc 0))
-        {:body   "retry"
-         :status 500})
+      ; (and (= id "b=2") (< attempt 2))
+      ; (do
+      ;   (swap! req-count update id (fnil inc 0))
+      ;   {:body   "retry"
+      ;    :status 500})
 
       (= id "c=3")
       {:body   "fail"
