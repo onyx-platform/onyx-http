@@ -86,7 +86,7 @@
     :onyx/medium :core.async
     :onyx/max-peers 1
     :onyx/batch-size 10
-    :onyx/batch-timeout 5
+    :onyx/batch-timeout 1
     :onyx/doc "Reads segments from a core.async channel"}
 
    {:onyx/name :do-requests
@@ -100,7 +100,7 @@
     :onyx/n-peers 1
     :onyx/medium :http
     :onyx/batch-size 10
-    :onyx/batch-timeout 5
+    :onyx/batch-timeout 1
     :onyx/doc "Sends http POST requests somewhere"}])
 
 (def lifecycles
