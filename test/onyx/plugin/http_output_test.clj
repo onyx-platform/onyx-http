@@ -94,8 +94,8 @@
     :http-output/success-fn ::success?
     :http-output/post-process-fn ::post-process
     :http-output/retry-params {:base-sleep-ms 100
-                               :max-sleep-ms 500
-                               :max-total-sleep-ms 1000}
+                               :max-sleep-ms 200
+                               :max-total-sleep-ms 500}
     :onyx/n-peers 1
     :onyx/medium :http
     :onyx/batch-size 10
