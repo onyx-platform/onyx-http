@@ -1,4 +1,4 @@
-(defproject org.onyxplatform/onyx-http "0.12.7.0"
+(defproject org.onyxplatform/onyx-http "0.12.7.1-SNAPSHOT"
   :description "Onyx plugin for HTTP"
   :url "https://github.com/onyx-platform/onyx-http"
   :repositories {"snapshots" {:url "https://clojars.org/repo"
