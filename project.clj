@@ -14,7 +14,7 @@
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :dependencies [[org.clojure/clojure "1.8.0"]
                  ^{:voom {:repo "git@github.com:onyx-platform/onyx.git" :branch "master"}}
-                 [org.onyxplatform/onyx "0.14.1-20181110_184323-g97fcfe4"]
+                 [org.onyxplatform/onyx "0.14.1-20181110_194116-ged5aa53"]
                  [aleph "0.4.4"]
                  [io.netty/netty-all "4.1.12.Final"]]
   :profiles {:dev {:dependencies [[cheshire "5.8.0"]]
