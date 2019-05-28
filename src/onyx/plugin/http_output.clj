@@ -80,12 +80,12 @@
 (defn send-request
   "Use send-request to execute HTTP requests in a :function task type. Requires function-lifecycle on the task."
   [{:keys [success? post-process retry-params]} run-state message]
-  (let [send-retry-params (assoc retry-params :initial-request-time (System/currentTimeMillis))
-        result (deref (process-message message success? post-process nil #(throw %) send-retry-params run-state))]
+  (let [request (or (:request message) (throw (ex-info "No :request in message" message)))
+        send-retry-params (assoc retry-params :initial-request-time (System/currentTimeMillis))
+        result (deref (process-message request success? post-process nil #(throw %) send-retry-params run-state))]
     (if (instance? Throwable result)
       (throw result)
-      {:message message
-       :response result})))
+      (assoc message :response result))))
 
 (defn check-exception! [async-exception-info]
   (when (not-empty @async-exception-info)
