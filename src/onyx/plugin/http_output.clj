@@ -59,7 +59,9 @@
               (do
                 (when post-process
                   (post-process message response))
-                (ack-fn))
+                (when ack-fn
+                  (ack-fn))
+                response)
 
               next-backoff-ms
               (if @run-state 
@@ -74,6 +76,16 @@
 
               :else
               (async-exception-fn response))))))))
+
+(defn send-request
+  "Use send-request to execute HTTP requests in a :function task type. Requires function-lifecycle on the task."
+  [{:keys [success? post-process retry-params]} run-state message]
+  (let [send-retry-params (assoc retry-params :initial-request-time (System/currentTimeMillis))
+        result (deref (process-message message success? post-process nil #(throw %) send-retry-params run-state))]
+    (if (instance? Throwable result)
+      (throw result)
+      {:message message
+       :response result})))
 
 (defn check-exception! [async-exception-info]
   (when (not-empty @async-exception-info)
@@ -130,16 +142,35 @@
 (defn success?-default [{:keys [status]}]
   (< status 500))
 
-
 (defn post-process-default [& args]
   nil)
 
-
-(defn output [{:keys [onyx.core/task-map] :as pipeline-data}]
+(defn- prepare-task-map
+  [task-map]
   (let [success?     (kw->fn (or (:http-output/success-fn task-map)
                                  ::success?-default))
         post-process (kw->fn (or (:http-output/post-process-fn task-map)
                                  ::post-process-default))
         retry-params (:http-output/retry-params task-map)
         retry-params (assoc retry-params :allow-retry? (some? retry-params))]
+    {:success? success?
+     :post-process post-process
+     :retry-params retry-params}))
+
+(defn start-function
+  [{:keys [onyx.core/task-map onyx.core/params]} lifecycle]
+  (log/debug "HTTP function start")
+  {:onyx.core/params (conj params (prepare-task-map task-map) (atom true))})
+
+(defn stop-function
+  [{:keys [onyx.core/params]}]
+  (log/debug "HTTP function stop")
+  (reset! (last params) false))
+
+(def function-lifecycle
+  {:lifecycle/before-task-start start-function
+   :lifecycle/after-task-stop stop-function})
+
+(defn output [{:keys [onyx.core/task-map] :as pipeline-data}]
+  (let [{:keys [success? post-process retry-params]} (prepare-task-map task-map)]
     (->HttpOutput success? post-process retry-params (atom nil) (atom 0) (atom false))))
