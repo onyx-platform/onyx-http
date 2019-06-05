@@ -159,13 +159,12 @@
 
 (defn start-function
   [{:keys [onyx.core/task-map onyx.core/params]} lifecycle]
-  (log/debug "HTTP function start")
   {:onyx.core/params (conj params (prepare-task-map task-map) (atom true))})
 
 (defn stop-function
-  [{:keys [onyx.core/params]}]
-  (log/debug "HTTP function stop")
-  (reset! (last params) false))
+  [{:keys [onyx.core/params]} lifecycle]
+  (reset! (last params) false)
+  {})
 
 (def function-lifecycle
   {:lifecycle/before-task-start start-function
